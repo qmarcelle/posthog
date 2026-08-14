@@ -64581,6 +64581,28 @@ export namespace Schemas {
     }
 
     /**
+     * * `default` - default
+     * * `acceptEdits` - acceptEdits
+     * * `plan` - plan
+     * * `bypassPermissions` - bypassPermissions
+     * * `auto` - auto
+     * * `read-only` - read-only
+     * * `full-access` - full-access
+     */
+    export type TaskRunBootstrapCreateRequestInitialPermissionModeEnum = typeof TaskRunBootstrapCreateRequestInitialPermissionModeEnum[keyof typeof TaskRunBootstrapCreateRequestInitialPermissionModeEnum];
+
+
+    export const TaskRunBootstrapCreateRequestInitialPermissionModeEnum = {
+      Default: 'default',
+      AcceptEdits: 'acceptEdits',
+      Plan: 'plan',
+      BypassPermissions: 'bypassPermissions',
+      Auto: 'auto',
+      ReadOnly: 'read-only',
+      FullAccess: 'full-access',
+    } as const;
+
+    /**
      * Request body for creating or updating a task.
      *
      * Field required/default semantics match the ``Task`` model. The view passes
@@ -64692,8 +64714,10 @@ export namespace Schemas {
        * * `acceptEdits` - acceptEdits
        * * `plan` - plan
        * * `bypassPermissions` - bypassPermissions
-       * * `auto` - auto */
-      initial_permission_mode?: InitialPermissionModeEnum | null;
+       * * `auto` - auto
+       * * `read-only` - read-only
+       * * `full-access` - full-access */
+      initial_permission_mode?: TaskRunBootstrapCreateRequestInitialPermissionModeEnum | null;
       /**
          * First user message to forward when creation reuses a pre-warmed Run. Write-only and not persisted on the task: lets clients deliver a message that differs from `description` (e.g. a resolved skill invocation with channel context folded in). Ignored when no warm Run is reused — cold creation takes the first message via the run start endpoint instead.
          * @nullable
@@ -80688,8 +80712,10 @@ export namespace Schemas {
        * * `acceptEdits` - acceptEdits
        * * `plan` - plan
        * * `bypassPermissions` - bypassPermissions
-       * * `auto` - auto */
-      initial_permission_mode?: InitialPermissionModeEnum | null;
+       * * `auto` - auto
+       * * `read-only` - read-only
+       * * `full-access` - full-access */
+      initial_permission_mode?: TaskRunBootstrapCreateRequestInitialPermissionModeEnum | null;
       /**
          * First user message to forward when creation reuses a pre-warmed Run. Write-only and not persisted on the task: lets clients deliver a message that differs from `description` (e.g. a resolved skill invocation with channel context folded in). Ignored when no warm Run is reused — cold creation takes the first message via the run start endpoint instead.
          * @nullable
@@ -81103,28 +81129,6 @@ export namespace Schemas {
     export const TaskRunBootstrapCreateRequestEnvironmentEnum = {
       Local: 'local',
       Cloud: 'cloud',
-    } as const;
-
-    /**
-     * * `default` - default
-     * * `acceptEdits` - acceptEdits
-     * * `plan` - plan
-     * * `bypassPermissions` - bypassPermissions
-     * * `auto` - auto
-     * * `read-only` - read-only
-     * * `full-access` - full-access
-     */
-    export type TaskRunBootstrapCreateRequestInitialPermissionModeEnum = typeof TaskRunBootstrapCreateRequestInitialPermissionModeEnum[keyof typeof TaskRunBootstrapCreateRequestInitialPermissionModeEnum];
-
-
-    export const TaskRunBootstrapCreateRequestInitialPermissionModeEnum = {
-      Default: 'default',
-      AcceptEdits: 'acceptEdits',
-      Plan: 'plan',
-      BypassPermissions: 'bypassPermissions',
-      Auto: 'auto',
-      ReadOnly: 'read-only',
-      FullAccess: 'full-access',
     } as const;
 
     /**
@@ -82100,8 +82104,10 @@ export namespace Schemas {
        * * `acceptEdits` - acceptEdits
        * * `plan` - plan
        * * `bypassPermissions` - bypassPermissions
-       * * `auto` - auto */
-      initial_permission_mode?: InitialPermissionModeEnum | null;
+       * * `auto` - auto
+       * * `read-only` - read-only
+       * * `full-access` - full-access */
+      initial_permission_mode?: TaskRunBootstrapCreateRequestInitialPermissionModeEnum | null;
       /**
          * First user message to forward when creation reuses a pre-warmed Run. Write-only and not persisted on the task: lets clients deliver a message that differs from `description` (e.g. a resolved skill invocation with channel context folded in). Ignored when no warm Run is reused — cold creation takes the first message via the run start endpoint instead.
          * @nullable
@@ -83482,8 +83488,10 @@ export namespace Schemas {
        * * `acceptEdits` - acceptEdits
        * * `plan` - plan
        * * `bypassPermissions` - bypassPermissions
-       * * `auto` - auto */
-      initial_permission_mode?: InitialPermissionModeEnum | null;
+       * * `auto` - auto
+       * * `read-only` - read-only
+       * * `full-access` - full-access */
+      initial_permission_mode?: TaskRunBootstrapCreateRequestInitialPermissionModeEnum | null;
     }
 
     /**
