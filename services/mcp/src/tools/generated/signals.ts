@@ -1171,6 +1171,9 @@ const scoutScratchpadRemember = (): ToolBase<typeof ScoutScratchpadRememberSchem
         if (params.run_id !== undefined) {
             body['run_id'] = params.run_id
         }
+        if (params.expires_at !== undefined) {
+            body['expires_at'] = params.expires_at
+        }
         const result = await context.api.request<Schemas.ScratchpadEntry>({
             method: 'POST',
             path: `/api/projects/${encodeURIComponent(String(projectId))}/signals/scout/scratchpad/`,
@@ -1197,6 +1200,7 @@ const scoutScratchpadSearch = (): ToolBase<
                 content_max_chars: params.content_max_chars,
                 date_from: params.date_from,
                 date_to: params.date_to,
+                include_expired: params.include_expired,
                 key: params.key,
                 keys_only: params.keys_only,
                 limit: params.limit,
@@ -1710,6 +1714,9 @@ const signalsScoutScratchpadRemember = (): ToolBase<
         if (params.run_id !== undefined) {
             body['run_id'] = params.run_id
         }
+        if (params.expires_at !== undefined) {
+            body['expires_at'] = params.expires_at
+        }
         const result = await context.api.request<Schemas.ScratchpadEntry>({
             method: 'POST',
             path: `/api/projects/${encodeURIComponent(String(projectId))}/signals/scout/scratchpad/`,
@@ -1736,6 +1743,7 @@ const signalsScoutScratchpadSearch = (): ToolBase<
                 content_max_chars: params.content_max_chars,
                 date_from: params.date_from,
                 date_to: params.date_to,
+                include_expired: params.include_expired,
                 key: params.key,
                 keys_only: params.keys_only,
                 limit: params.limit,
