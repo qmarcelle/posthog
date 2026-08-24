@@ -27146,6 +27146,15 @@ class TraceSpansTreeQuery(BaseModel):
     version: float | None = Field(default=None, description="version of the node, used for schema migrations")
 
 
+class TracingAlertFilters(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    errorOnly: bool | None = None
+    filterGroup: PropertyGroupFilter | None = None
+    serviceNames: list[str] | None = None
+
+
 class VectorSearchQuery(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
