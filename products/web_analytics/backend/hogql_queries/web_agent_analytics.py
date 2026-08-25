@@ -637,13 +637,13 @@ class WebAgentAnalyticsQueryRunner(WebAnalyticsQueryRunner[WebAgentAnalyticsQuer
             limit_context=self.limit_context,
         )
 
-    def _supplementary_templates(self) -> list[tuple[str, str]]:
+    def _supplementary_responses(self) -> list[HogQLQueryResponse]:
         if self.query.queryType != WebAgentAnalyticsQueryType.OVERVIEW:
             return []
-        templates = [(DOUBLE_FETCH_QUERY, "double_fetch")]
+        responses = [self._execute(DOUBLE_FETCH_QUERY, "double_fetch")]
         if self.query.conversionGoal:
-            templates.append((CONVERSION_GOAL_QUERY, "conversion_goal"))
-        return templates
+            responses.append(self._execute(CONVERSION_GOAL_QUERY, "conversion_goal"))
+        return responses
 
     def _calculate(self) -> WebAgentAnalyticsQueryResponse:
         response = self.paginator.execute_hogql_query(
@@ -659,8 +659,7 @@ class WebAgentAnalyticsQueryRunner(WebAnalyticsQueryRunner[WebAgentAnalyticsQuer
         results = [list(row) for row in self.paginator.results]
         hogql_parts = [response.hogql]
 
-        for template, query_type in self._supplementary_templates():
-            supplement = self._execute(template, query_type)
+        for supplement in self._supplementary_responses():
             columns.extend(supplement.columns or [])
             types.extend(supplement.types or [])
             supplement_row = list(supplement.results[0]) if supplement.results else []
