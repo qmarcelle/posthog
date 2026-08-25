@@ -95015,6 +95015,7 @@ export namespace Schemas {
      * * `posthog_ai` - PostHog AI
      * * `experiments` - Experiments
      * * `signal_report` - Signal Report
+     * * `autoresearch` - Autoresearch
      * * `signals_scout` - Signals Scout
      * * `support_reply` - Support Reply
      * * `hogdesk` - HogDesk
@@ -95145,6 +95146,7 @@ export namespace Schemas {
       PosthogAi: 'posthog_ai',
       Experiments: 'experiments',
       SignalReport: 'signal_report',
+      Autoresearch: 'autoresearch',
       SignalsScout: 'signals_scout',
       SupportReply: 'support_reply',
       Hogdesk: 'hogdesk',
