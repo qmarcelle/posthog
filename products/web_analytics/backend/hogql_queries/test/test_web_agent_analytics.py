@@ -1,5 +1,3 @@
-from typing import cast
-
 from freezegun import freeze_time
 from posthog.test.base import APIBaseTest, ClickhouseTestMixin, _create_event, _create_person, flush_persons_and_events
 
@@ -23,10 +21,6 @@ from products.web_analytics.backend.hogql_queries.web_agent_analytics import Web
 ASSISTANT_USER_AGENT = "Mozilla/5.0 (compatible; ChatGPT-User/1.0; +https://openai.com/bot)"
 CRAWLER_USER_AGENT = "Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)"
 HUMAN_USER_AGENT = "Mozilla/5.0 AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36"
-SESSION_ONE = "01989abc-1234-7abc-8abc-123456789abc"
-SESSION_TWO = "01989abc-1234-7abc-8abc-123456789abd"
-SESSION_THREE = "01989abc-1234-7abc-8abc-123456789abe"
-SESSION_FOUR = "01989abc-1234-7abc-8abc-123456789abf"
 
 
 class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
@@ -39,12 +33,7 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
         user_agent: str = ASSISTANT_USER_AGENT,
         timestamp: str = "2026-08-10T12:00:00Z",
         host: str = "example.com",
-        session_id: str | None = None,
-        agent_session_id: str | None = None,
         referrer: str | None = None,
-        accept: str | None = None,
-        content_type: str | None = None,
-        canonical_status_code: int | None = None,
     ) -> None:
         properties: dict[str, object | None] = {
             "$host": host,
@@ -52,18 +41,8 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
             "$raw_user_agent": user_agent,
             "proxy_status_code": status_code,
         }
-        if session_id is not None:
-            properties["$session_id"] = session_id
-        if agent_session_id is not None:
-            properties["$agent_session_id"] = agent_session_id
         if referrer is not None:
             properties["proxy_referer"] = referrer
-        if accept is not None:
-            properties["$http_request_accept"] = accept
-        if content_type is not None:
-            properties["$http_response_content_type"] = content_type
-        if canonical_status_code is not None:
-            properties["$http_response_status_code"] = canonical_status_code
         _create_event(
             team=self.team,
             event="$http_log",
@@ -80,13 +59,9 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
         conversion_goal: ActionConversionGoal | CustomEventConversionGoal | None = None,
         content_grouping: WebAgentContentGrouping = WebAgentContentGrouping.NORMALIZED,
         properties: list[EventPropertyFilter] | None = None,
-        navigation_window_minutes: int = 30,
-        inactivity_window_minutes: int = 30,
-        conversion_window_hours: int = 24,
         llms_txt_url: str | None = None,
         journey_key: str | None = None,
         intent_key: str | None = None,
-        minimum_requests: int | None = None,
         limit: int = 100,
     ) -> WebAgentAnalyticsQueryResponse:
         query = WebAgentAnalyticsQuery(
@@ -96,13 +71,9 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
             contentGrouping=content_grouping,
             conversionGoal=conversion_goal,
             properties=properties or [],
-            navigationWindowMinutes=navigation_window_minutes,
-            inactivityWindowMinutes=inactivity_window_minutes,
-            conversionWindowHours=conversion_window_hours,
             llmsTxtUrl=llms_txt_url,
             journeyKey=journey_key,
             intentKey=intent_key,
-            minimumRequests=minimum_requests,
             limit=limit,
         )
         with freeze_time("2026-08-20T18:00:00Z"):
@@ -113,6 +84,11 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
         assert response.columns is not None
         assert response.results
         return dict(zip(response.columns, response.results[0], strict=True))
+
+    @staticmethod
+    def _rows(response: WebAgentAnalyticsQueryResponse) -> list[dict[str, object]]:
+        assert response.columns is not None
+        return [dict(zip(response.columns, row, strict=True)) for row in response.results]
 
     def test_overview_excludes_humans_scanners_and_unpaired_markdown_fetches(self) -> None:
         for distinct_id in ("paired", "markdown-only", "human", "crawler"):
@@ -140,57 +116,27 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
         self.assertEqual(crawler_row["active_clients"], 3)
         self.assertEqual(crawler_row["server_requests"], 4)
 
-    def test_overview_correlates_conversion_goals_with_agent_identifiers(self) -> None:
-        for distinct_id in (
-            "converted-agent",
-            "agent-only",
-            "human-only",
-            "wrong-order",
-            "wrong-session",
-            "expired",
-        ):
+    def test_overview_counts_agents_that_reach_the_conversion_goal_inside_the_window(self) -> None:
+        for distinct_id in ("converted-agent", "agent-only", "human-only", "wrong-order", "expired"):
             _create_person(team_id=self.team.pk, distinct_ids=[distinct_id], properties={})
 
-        self._create_http_event("converted-agent", "/docs/start", 200, session_id=SESSION_ONE)
+        self._create_http_event("converted-agent", "/docs/start", 200)
         self._create_http_event("agent-only", "/docs/start", 200)
         self._create_http_event("wrong-order", "/docs/start", 200, timestamp="2026-08-10T12:10:00Z")
-        self._create_http_event("wrong-session", "/docs/start", 200, session_id=SESSION_TWO)
         self._create_http_event("expired", "/docs/start", 200, timestamp="2026-08-10T00:00:00Z")
-        _create_event(
-            team=self.team,
-            event="completed_signup",
-            distinct_id="converted-agent",
-            timestamp="2026-08-10T12:05:00Z",
-            properties={"$session_id": SESSION_ONE},
-        )
-        _create_event(
-            team=self.team,
-            event="completed_signup",
-            distinct_id="human-only",
-            timestamp="2026-08-10T12:05:00Z",
-            properties={},
-        )
-        _create_event(
-            team=self.team,
-            event="completed_signup",
-            distinct_id="wrong-order",
-            timestamp="2026-08-10T12:05:00Z",
-            properties={},
-        )
-        _create_event(
-            team=self.team,
-            event="completed_signup",
-            distinct_id="wrong-session",
-            timestamp="2026-08-10T12:05:00Z",
-            properties={"$session_id": SESSION_THREE},
-        )
-        _create_event(
-            team=self.team,
-            event="completed_signup",
-            distinct_id="expired",
-            timestamp="2026-08-11T01:00:00Z",
-            properties={},
-        )
+        for distinct_id, timestamp in (
+            ("converted-agent", "2026-08-10T12:05:00Z"),
+            ("human-only", "2026-08-10T12:05:00Z"),
+            ("wrong-order", "2026-08-10T12:05:00Z"),
+            ("expired", "2026-08-11T01:00:00Z"),
+        ):
+            _create_event(
+                team=self.team,
+                event="completed_signup",
+                distinct_id=distinct_id,
+                timestamp=timestamp,
+                properties={},
+            )
         flush_persons_and_events()
 
         row = self._first_row(
@@ -214,9 +160,7 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
         self._create_http_event("human", "/docs/sdk-4.0.0", 404, user_agent=HUMAN_USER_AGENT)
         flush_persons_and_events()
 
-        response = self._run(WebAgentAnalyticsQueryType.ISSUES)
-        assert response.columns is not None
-        rows = [dict(zip(response.columns, row, strict=True)) for row in response.results]
+        rows = self._rows(self._run(WebAgentAnalyticsQueryType.ISSUES))
 
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["intent_key"], "example.com/docs/sdk")
@@ -246,10 +190,10 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
         self._create_http_event("assistant", "/docs/start", 200)
         self._create_http_event("assistant", "/docs/start", 200)
         self._create_http_event("assistant", "/docs/other", 200)
-        self._create_http_event("assistant", "/docs/missing", 404)  # not successful
-        self._create_http_event("assistant", "/.env", 200)  # scanner path
-        self._create_http_event("assistant", "/logo.svg", 200)  # static asset
-        self._create_http_event("human", "/docs/start", 200, user_agent=HUMAN_USER_AGENT)  # not an agent
+        self._create_http_event("assistant", "/docs/missing", 404)
+        self._create_http_event("assistant", "/.env", 200)
+        self._create_http_event("assistant", "/logo.svg", 200)
+        self._create_http_event("human", "/docs/start", 200, user_agent=HUMAN_USER_AGENT)
         flush_persons_and_events()
 
         rows = self._rows(self._run(WebAgentAnalyticsQueryType.DEMAND))
@@ -297,56 +241,28 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
         self.assertEqual(len(response.results), 1)
         self.assertEqual(response.results[0][0], "docs.example.com/included")
 
-    def test_transitions_require_the_loaded_source_journey_and_time_window(self) -> None:
-        for distinct_id in ("valid", "late", "wrong-session", "wrong-host", "cross-domain"):
+    def test_transitions_require_the_loaded_source_page_host_and_time_window(self) -> None:
+        for distinct_id in ("valid", "late", "wrong-host", "cross-domain"):
             _create_person(team_id=self.team.pk, distinct_ids=[distinct_id], properties={})
 
-        self._create_http_event("valid", "/ai/llms.txt", 200, host="docs.example.com", session_id=SESSION_ONE)
+        self._create_http_event("valid", "/ai/llms.txt", 200, host="docs.example.com")
         self._create_http_event(
-            "valid",
-            "/guides/start",
-            200,
-            host="docs.example.com",
-            session_id=SESSION_ONE,
-            timestamp="2026-08-10T12:05:00Z",
+            "valid", "/guides/start", 200, host="docs.example.com", timestamp="2026-08-10T12:05:00Z"
         )
-        self._create_http_event("late", "/ai/llms.txt", 200, host="docs.example.com", session_id=SESSION_TWO)
-        self._create_http_event(
-            "late",
-            "/guides/late",
-            200,
-            host="docs.example.com",
-            session_id=SESSION_TWO,
-            timestamp="2026-08-10T13:00:00Z",
-        )
-        self._create_http_event("wrong-session", "/ai/llms.txt", 200, host="docs.example.com", session_id=SESSION_THREE)
-        self._create_http_event(
-            "wrong-session",
-            "/guides/wrong-session",
-            200,
-            host="docs.example.com",
-            session_id=SESSION_FOUR,
-            timestamp="2026-08-10T12:05:00Z",
-        )
+        self._create_http_event("late", "/ai/llms.txt", 200, host="docs.example.com")
+        self._create_http_event("late", "/guides/late", 200, host="docs.example.com", timestamp="2026-08-10T13:00:00Z")
         self._create_http_event("wrong-host", "/ai/llms.txt", 200, host="other.example.com")
         self._create_http_event(
             "wrong-host", "/guides/wrong-host", 200, host="other.example.com", timestamp="2026-08-10T12:05:00Z"
         )
-        self._create_http_event("cross-domain", "/ai/llms.txt", 200, host="docs.example.com", session_id=SESSION_ONE)
+        self._create_http_event("cross-domain", "/ai/llms.txt", 200, host="docs.example.com")
         self._create_http_event(
-            "cross-domain",
-            "/guides/cross-domain",
-            200,
-            host="other.example.com",
-            session_id=SESSION_ONE,
-            timestamp="2026-08-10T12:05:00Z",
+            "cross-domain", "/guides/cross-domain", 200, host="other.example.com", timestamp="2026-08-10T12:05:00Z"
         )
         flush_persons_and_events()
 
         response = self._run(
-            WebAgentAnalyticsQueryType.TRANSITIONS,
-            llms_txt_url="https://docs.example.com/ai/llms.txt",
-            navigation_window_minutes=30,
+            WebAgentAnalyticsQueryType.TRANSITIONS, llms_txt_url="https://docs.example.com/ai/llms.txt"
         )
 
         self.assertEqual(response.results, [["/guides/start", 1, 0]])
@@ -373,9 +289,7 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
         self._create_http_event("markdown-only", "/docs/other.md", 200)
         flush_persons_and_events()
 
-        response = self._run(WebAgentAnalyticsQueryType.PAGE_REQUESTS)
-        assert response.columns is not None
-        rows = [dict(zip(response.columns, row, strict=True)) for row in response.results]
+        rows = self._rows(self._run(WebAgentAnalyticsQueryType.PAGE_REQUESTS))
 
         self.assertEqual(
             rows[0],
@@ -388,50 +302,25 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
             },
         )
 
-    def _rows(self, response: WebAgentAnalyticsQueryResponse) -> list[dict[str, object]]:
-        assert response.columns is not None
-        return [dict(zip(response.columns, row, strict=True)) for row in response.results]
-
-    def test_journeys_split_on_inactivity_keep_hosts_separate_and_respect_explicit_sessions(self) -> None:
-        for distinct_id in ("wanderer", "explicit"):
-            _create_person(team_id=self.team.pk, distinct_ids=[distinct_id], properties={})
+    def test_journeys_split_on_inactivity_and_keep_hosts_separate(self) -> None:
+        _create_person(team_id=self.team.pk, distinct_ids=["wanderer"], properties={})
 
         self._create_http_event("wanderer", "/p1", 200, timestamp="2026-08-10T12:00:00Z")
         self._create_http_event("wanderer", "/p2", 200, timestamp="2026-08-10T12:05:00Z")
         self._create_http_event("wanderer", "/p3", 200, timestamp="2026-08-10T13:00:00Z")
         self._create_http_event("wanderer", "/q1", 200, host="other.com", timestamp="2026-08-10T12:02:00Z")
-        self._create_http_event("explicit", "/r1", 200, agent_session_id=SESSION_ONE, timestamp="2026-08-10T12:00:00Z")
-        self._create_http_event("explicit", "/r2", 200, agent_session_id=SESSION_ONE, timestamp="2026-08-10T14:00:00Z")
-        self._create_http_event(
-            "explicit",
-            "/r3",
-            200,
-            host="other.com",
-            agent_session_id=SESSION_ONE,
-            timestamp="2026-08-10T12:03:00Z",
-        )
         flush_persons_and_events()
 
         journeys = self._rows(self._run(WebAgentAnalyticsQueryType.JOURNEYS))
         summary = self._first_row(self._run(WebAgentAnalyticsQueryType.JOURNEY_SUMMARY))
 
-        self.assertEqual(len(journeys), 5)
-        self.assertEqual(summary["total_journeys"], 5)
-        self.assertEqual(summary["explicit_journeys"], 2)
-
-        explicit = [row for row in journeys if row["confidence"] == "explicit"]
-        self.assertEqual(len(explicit), 2)
-        explicit_on_example = next(row for row in explicit if row["host"] == "example.com")
-        self.assertEqual(explicit_on_example["requests"], 2)
-        self.assertEqual(explicit_on_example["pages"], 2)
-        self.assertEqual(explicit_on_example["duration_seconds"], 2 * 60 * 60)
-
-        example_journeys = sorted(
-            (row for row in journeys if row["host"] == "example.com" and row["confidence"] == "inferred"),
-            key=lambda row: cast(int, row["requests"]),
-            reverse=True,
+        self.assertEqual(len(journeys), 3)
+        self.assertEqual(summary["total_journeys"], 3)
+        self.assertEqual(sorted(str(row["host"]) for row in journeys), ["example.com", "example.com", "other.com"])
+        example_requests = sorted(
+            (int(str(row["requests"])) for row in journeys if row["host"] == "example.com"), reverse=True
         )
-        self.assertEqual([row["requests"] for row in example_journeys], [2, 1])
+        self.assertEqual(example_requests, [2, 1])
 
     def test_journey_detail_labels_transitions_by_the_strongest_available_signal(self) -> None:
         _create_person(team_id=self.team.pk, distinct_ids=["reader"], properties={})
@@ -478,72 +367,24 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
         self.assertEqual(len(detail), 2)
         self.assertEqual(sorted(str(row["transition"]) for row in detail), ["parallel", "start"])
 
-    def test_request_anatomy_aggregates_format_retries_errors_and_accept_per_agent(self) -> None:
+    def test_request_anatomy_aggregates_format_retries_and_errors_per_agent(self) -> None:
         _create_person(team_id=self.team.pk, distinct_ids=["client"], properties={})
-        self._create_http_event(
-            "client",
-            "/docs",
-            200,
-            accept="text/html,application/xhtml+xml",
-            timestamp="2026-08-10T12:00:00Z",
-        )
-        self._create_http_event(
-            "client",
-            "/docs.md",
-            200,
-            accept="text/markdown,text/html;q=0.9",
-            content_type="text/markdown; charset=utf-8",
-            timestamp="2026-08-10T12:00:05Z",
-        )
+        self._create_http_event("client", "/docs", 200, timestamp="2026-08-10T12:00:00Z")
+        self._create_http_event("client", "/docs.md", 200, timestamp="2026-08-10T12:00:05Z")
         self._create_http_event("client", "/missing", 404, timestamp="2026-08-10T12:00:10Z")
         self._create_http_event("client", "/before.md", 200, timestamp="2026-08-10T12:00:15Z")
         self._create_http_event("client", "/before", 200, timestamp="2026-08-10T12:00:20Z")
-        self._create_http_event(
-            "client",
-            "/quality-order",
-            200,
-            accept="text/html;q=0.2, text/markdown;q=0.9",
-            timestamp="2026-08-10T12:00:25Z",
-        )
-        self._create_http_event(
-            "client",
-            "/rejected",
-            200,
-            accept="text/markdown;q=0, text/html;q=0.5",
-            timestamp="2026-08-10T12:00:30Z",
-        )
-        self._create_http_event(
-            "client",
-            "/wildcard",
-            200,
-            accept="text/html;q=1, */*;q=0.5",
-            timestamp="2026-08-10T12:00:35Z",
-        )
-        self._create_http_event(
-            "client",
-            "/canonical-status",
-            200,
-            canonical_status_code=503,
-            timestamp="2026-08-10T12:00:40Z",
-        )
         flush_persons_and_events()
 
-        rows = self._rows(self._run(WebAgentAnalyticsQueryType.REQUEST_ANATOMY, minimum_requests=1))
+        rows = self._rows(self._run(WebAgentAnalyticsQueryType.REQUEST_ANATOMY))
 
         self.assertEqual(len(rows), 1)
-        row = rows[0]
-        self.assertEqual(row["requests"], 9)
-        self.assertEqual(row["requested_markdown"], 2)
-        self.assertEqual(row["retry_pairs"], 1)
-        self.assertEqual(row["errors"], 2)
-        self.assertEqual(row["accept_captured"], 5)
-        self.assertEqual(row["accept_markdown_preferred"], 2)
-        self.assertEqual(row["accept_markdown_accepted"], 1)
-        self.assertEqual(row["accept_html_only"], 2)
-        self.assertEqual(row["served_captured"], 1)
-        self.assertEqual(row["served_markdown"], 1)
+        self.assertEqual(rows[0]["requests"], 5)
+        self.assertEqual(rows[0]["requested_markdown"], 2)
+        self.assertEqual(rows[0]["retry_pairs"], 1)
+        self.assertEqual(rows[0]["errors"], 1)
 
-    def test_all_query_modes_compile_below_the_clickhouse_query_size_limit(self) -> None:
+    def test_every_query_mode_compiles(self) -> None:
         for query_type in WebAgentAnalyticsQueryType:
             with self.subTest(query_type=query_type):
                 query = WebAgentAnalyticsQuery(
@@ -552,7 +393,7 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
                     intentKey="example.com/docs/sdk"
                     if query_type == WebAgentAnalyticsQueryType.ISSUE_VARIANTS
                     else None,
-                    journeyKey="i:client:example.com:1"
+                    journeyKey="client:ChatGPT:example.com:1"
                     if query_type == WebAgentAnalyticsQueryType.JOURNEY_DETAIL
                     else None,
                     properties=[],

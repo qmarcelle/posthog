@@ -242,6 +242,7 @@ export type AnyDataNode =
     | WebStatsTableQuery
     | WebExternalClicksTableQuery
     | WebBotsTableQuery
+    | WebAgentAnalyticsQuery
     | WebGoalsQuery
     | WebVitalsQuery
     | WebVitalsPathBreakdownQuery
@@ -293,7 +294,6 @@ export type AnyDataNode =
     | MCPToolDescriptionsQuery
     | MCPToolSampleIntentsQuery
     | MCPToolNeighborsQuery
-    | WebAgentAnalyticsQuery
 
 /**
  * @discriminator kind
@@ -334,6 +334,7 @@ export type QuerySchema =
     | WebStatsTableQuery
     | WebExternalClicksTableQuery
     | WebBotsTableQuery
+    | WebAgentAnalyticsQuery
     | WebGoalsQuery
     | WebVitalsQuery
     | WebVitalsPathBreakdownQuery
@@ -427,7 +428,6 @@ export type QuerySchema =
 
     // Property values
     | PropertyValuesQuery
-    | WebAgentAnalyticsQuery
 
 // Keep this, because QuerySchema itself will be collapsed as it is used in other models
 export type QuerySchemaRoot = QuerySchema
@@ -3737,13 +3737,7 @@ export interface WebAgentAnalyticsQuery extends WebAnalyticsQueryBase<WebAgentAn
     kind: NodeKind.WebAgentAnalyticsQuery
     queryType: WebAgentAnalyticsQueryType
     includeCrawlers?: boolean
-    includeExcluded?: boolean
     contentGrouping?: WebAgentContentGrouping
-    navigationWindowMinutes?: integer
-    /** Gap in minutes that ends an inferred journey when no explicit session ID is present. */
-    inactivityWindowMinutes?: integer
-    conversionWindowHours?: integer
-    minimumRequests?: integer
     llmsTxtUrl?: string
     limit?: integer
     offset?: integer
@@ -3759,7 +3753,6 @@ export interface WebAgentAnalyticsQueryResponse extends AnalyticsQueryResponseBa
     hasMore?: boolean
     limit?: integer
     offset?: integer
-    definitionVersion?: integer
 }
 export type CachedWebAgentAnalyticsQueryResponse = CachedQueryResponse<WebAgentAnalyticsQueryResponse>
 
