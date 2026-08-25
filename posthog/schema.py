@@ -25216,6 +25216,19 @@ class AssistantFunnelsActorsQuery(BaseModel):
         description="Whether to include matched session recordings for each actor.",
     )
     kind: Literal["FunnelsActorsQuery"] = "FunnelsActorsQuery"
+    limit: int | None = Field(
+        default=100,
+        description=("Maximum number of persons to return in one page, from 1 to 1000. Higher values are clamped."),
+    )
+    offset: int | None = Field(
+        default=0,
+        description=(
+            "Number of persons to skip before the returned page. Use it with `limit` to"
+            " walk the whole result set: the response reports `limit`, `offset`, and"
+            " `hasMore`, so when `hasMore` is true, call again with `offset` raised by"
+            " `limit`."
+        ),
+    )
     source: AssistantFunnelsQuery = Field(
         ...,
         description=("The source funnel insight query whose step (or trends point) we are drilling into."),
@@ -25285,6 +25298,19 @@ class AssistantPathsActorsQuery(BaseModel):
         description="Whether to include matched session recordings for each actor.",
     )
     kind: Literal["InsightActorsQuery"] = "InsightActorsQuery"
+    limit: int | None = Field(
+        default=100,
+        description=("Maximum number of persons to return in one page, from 1 to 1000. Higher values are clamped."),
+    )
+    offset: int | None = Field(
+        default=0,
+        description=(
+            "Number of persons to skip before the returned page. Use it with `limit` to"
+            " walk the whole result set: the response reports `limit`, `offset`, and"
+            " `hasMore`, so when `hasMore` is true, call again with `offset` raised by"
+            " `limit`."
+        ),
+    )
     source: AssistantPathsQuery = Field(..., description="The source paths insight query whose actors we are listing.")
 
 
@@ -25301,6 +25327,19 @@ class AssistantRetentionActorsQuery(BaseModel):
         ),
     )
     kind: Literal["InsightActorsQuery"] = "InsightActorsQuery"
+    limit: int | None = Field(
+        default=100,
+        description=("Maximum number of persons to return in one page, from 1 to 1000. Higher values are clamped."),
+    )
+    offset: int | None = Field(
+        default=0,
+        description=(
+            "Number of persons to skip before the returned page. Use it with `limit` to"
+            " walk the whole cohort: the response reports `limit`, `offset`, and"
+            " `hasMore`, so when `hasMore` is true, call again with `offset` raised by"
+            " `limit`."
+        ),
+    )
     source: AssistantRetentionQuery = Field(
         ...,
         description=("The source retention insight query whose cohort we are drilling into."),
@@ -25325,6 +25364,19 @@ class AssistantStickinessActorsQuery(BaseModel):
         ),
     )
     kind: Literal["InsightActorsQuery"] = "InsightActorsQuery"
+    limit: int | None = Field(
+        default=100,
+        description=("Maximum number of persons to return in one page, from 1 to 1000. Higher values are clamped."),
+    )
+    offset: int | None = Field(
+        default=0,
+        description=(
+            "Number of persons to skip before the returned page. Use it with `limit` to"
+            " walk the whole result set: the response reports `limit`, `offset`, and"
+            " `hasMore`, so when `hasMore` is true, call again with `offset` raised by"
+            " `limit`."
+        ),
+    )
     series: int | None = Field(
         default=None,
         description=("0-based index of the series to drill into when the source has multiple series. Defaults to 0."),
@@ -25360,6 +25412,19 @@ class AssistantTrendsActorsQuery(BaseModel):
         description="Whether to include matched session recordings for each actor.",
     )
     kind: Literal["InsightActorsQuery"] = "InsightActorsQuery"
+    limit: int | None = Field(
+        default=100,
+        description=("Maximum number of persons to return in one page, from 1 to 1000. Higher values are clamped."),
+    )
+    offset: int | None = Field(
+        default=0,
+        description=(
+            "Number of persons to skip before the returned page. Use it with `limit` to"
+            " walk the whole result set: the response reports `limit`, `offset`, and"
+            " `hasMore`, so when `hasMore` is true, call again with `offset` raised by"
+            " `limit`."
+        ),
+    )
     series: int | None = Field(
         default=None,
         description="Series index (0-based) when the source has multiple series.",
@@ -27377,6 +27442,19 @@ class AssistantLifecycleActorsQuery(BaseModel):
         description=("Bucket date for the data point. Must be an ISO date string (YYYY-MM-DD), e.g. '2024-01-15'."),
     )
     kind: Literal["InsightActorsQuery"] = "InsightActorsQuery"
+    limit: int | None = Field(
+        default=100,
+        description=("Maximum number of persons to return in one page, from 1 to 1000. Higher values are clamped."),
+    )
+    offset: int | None = Field(
+        default=0,
+        description=(
+            "Number of persons to skip before the returned page. Use it with `limit` to"
+            " walk the whole result set: the response reports `limit`, `offset`, and"
+            " `hasMore`, so when `hasMore` is true, call again with `offset` raised by"
+            " `limit`."
+        ),
+    )
     source: AssistantLifecycleQuery = Field(
         ...,
         description=("The source lifecycle insight query whose bucket we are drilling into."),

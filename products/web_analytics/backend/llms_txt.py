@@ -1,15 +1,23 @@
+import time
 import urllib.parse as urlparse
 
 import requests
+import structlog
 
 from posthog.dataclasses import frozen
 from posthog.security.pinned_requests import SSRFBlockedError, pinned_session
 from posthog.security.url_validation import strip_userinfo
 
+logger = structlog.get_logger(__name__)
+
 LLMS_TXT_MAX_BYTES = 1024 * 1024
 LLMS_TXT_MAX_REDIRECTS = 3
-LLMS_TXT_TIMEOUT = (3.05, 10.0)
+LLMS_TXT_CONNECT_TIMEOUT_SECONDS = 3.05
+LLMS_TXT_READ_TIMEOUT_SECONDS = 10.0
+LLMS_TXT_TOTAL_BUDGET_SECONDS = 20.0
+LLMS_TXT_READ_CHUNK_BYTES = 64 * 1024
 LLMS_TXT_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
+LLMS_TXT_ACCEPTED_CONTENT_ENCODINGS = {"", "identity"}
 
 
 class LlmsTxtFetchError(Exception):
@@ -22,32 +30,50 @@ class FetchedLlmsTxt:
     url: str
 
 
-def _read_response_body(response: requests.Response) -> bytes:
+def _read_once(response: requests.Response, amt: int) -> bytes:
+    raw = response.raw
+    read1 = getattr(raw, "read1", None) or getattr(getattr(raw, "_fp", None), "read1", None)
+    if read1 is None:
+        raise LlmsTxtFetchError("Could not read the file.")
+    return bytes(read1(amt))
+
+
+def _read_response_body(response: requests.Response, deadline: float) -> bytes:
     chunks: list[bytes] = []
     total_bytes = 0
-    for chunk in response.iter_content(chunk_size=64 * 1024):
+    while True:
+        if time.monotonic() > deadline:
+            raise LlmsTxtFetchError("The file took too long to load.")
+        chunk = _read_once(response, LLMS_TXT_READ_CHUNK_BYTES)
         if not chunk:
-            continue
+            return b"".join(chunks)
         total_bytes += len(chunk)
         if total_bytes > LLMS_TXT_MAX_BYTES:
             raise LlmsTxtFetchError("The file is larger than 1 MB.")
         chunks.append(chunk)
-    return b"".join(chunks)
 
 
 def fetch_llms_txt(url: str) -> FetchedLlmsTxt:
     current_url = strip_userinfo(urlparse.urldefrag(url.strip())[0])
+    # One budget for the whole chain: the read timeout bounds the gap between chunks, not the total
+    # transfer, so a host that trickles bytes would otherwise hold a web worker indefinitely.
+    deadline = time.monotonic() + LLMS_TXT_TOTAL_BUDGET_SECONDS
 
     for _redirect_count in range(LLMS_TXT_MAX_REDIRECTS + 1):
+        read_timeout = min(LLMS_TXT_READ_TIMEOUT_SECONDS, deadline - time.monotonic())
+        if read_timeout <= 0:
+            raise LlmsTxtFetchError("The file took too long to load.")
         try:
             with pinned_session(current_url) as session:
                 response = session.get(
                     current_url,
                     headers={
                         "Accept": "text/plain,text/markdown;q=0.9,*/*;q=0.1",
+                        # Undecoded, so the size cap counts what we actually read off the wire.
+                        "Accept-Encoding": "identity",
                         "User-Agent": "PostHog llms.txt fetcher",
                     },
-                    timeout=LLMS_TXT_TIMEOUT,
+                    timeout=(LLMS_TXT_CONNECT_TIMEOUT_SECONDS, read_timeout),
                     allow_redirects=False,
                     stream=True,
                 )
@@ -67,11 +93,11 @@ def fetch_llms_txt(url: str) -> FetchedLlmsTxt:
                     if media_type in {"text/html", "application/xhtml+xml"}:
                         raise LlmsTxtFetchError("The URL returned an HTML page instead of an llms.txt file.")
 
-                    content_length = response.headers.get("Content-Length", "")
-                    if content_length.isdigit() and int(content_length) > LLMS_TXT_MAX_BYTES:
-                        raise LlmsTxtFetchError("The file is larger than 1 MB.")
+                    content_encoding = response.headers.get("Content-Encoding", "").strip().lower()
+                    if content_encoding not in LLMS_TXT_ACCEPTED_CONTENT_ENCODINGS:
+                        raise LlmsTxtFetchError("The URL returned a compressed file. Serve llms.txt as plain text.")
 
-                    body = _read_response_body(response)
+                    body = _read_response_body(response, deadline)
                     content = body.decode("utf-8-sig", errors="replace")
                     if not content.strip():
                         raise LlmsTxtFetchError("The file is empty.")
@@ -79,8 +105,12 @@ def fetch_llms_txt(url: str) -> FetchedLlmsTxt:
                 finally:
                     response.close()
         except SSRFBlockedError as error:
+            logger.info("llms_txt.url_blocked", reason=str(error))
             raise LlmsTxtFetchError("Enter a publicly accessible HTTP or HTTPS URL.") from error
         except requests.RequestException as error:
+            # Deliberately not logging the exception or the URL: both routinely echo the full target,
+            # and a customer-supplied URL can carry credentials or a signed token.
+            logger.info("llms_txt.request_failed")
             raise LlmsTxtFetchError("Could not reach the URL.") from error
 
     raise LlmsTxtFetchError("The URL redirected too many times.")
