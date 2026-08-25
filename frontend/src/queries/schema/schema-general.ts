@@ -9158,6 +9158,8 @@ export const externalDataSources = [
     'Growi',
     'Clarify',
     'DatoCMS',
+    'WPSOffice',
+    'TeraBox',
 ] as const
 
 export type ExternalDataSourceType = (typeof externalDataSources)[number]
