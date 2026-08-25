@@ -35,15 +35,12 @@ from products.web_analytics.backend.hogql_queries.agent_analytics_definitions im
     page_identity_expr,
     referrer_expr,
     response_status_code_expr,
-    scanner_path_expr,
     static_asset_expr,
 )
 from products.web_analytics.backend.hogql_queries.web_analytics_query_runner import WebAnalyticsQueryRunner
 
 
 def markdown_retry_pairs(*, md_times: str, html_times: str) -> str:
-    """Markdown fetches that follow a successful HTML fetch of the same page inside the navigation
-    window. Agents do this when nothing advertises the .md twin up front."""
     return (
         "arrayCount("
         "md_time -> arrayExists("
@@ -302,8 +299,6 @@ ORDER BY requests DESC, agent
 """
 )
 
-# $http_log carries no session ID, so a journey is a run of requests from one client to one host
-# with no gap longer than the inactivity window.
 _SESSIONIZED_EVENTS = r"""
 SELECT
     distinct_id,
@@ -558,7 +553,7 @@ class WebAgentAnalyticsQueryRunner(WebAnalyticsQueryRunner[WebAgentAnalyticsQuer
         status = response_status_code_expr()
         is_200 = parse_expr("{status} = 200", placeholders={"status": status})
         is_md = markdown_path_expr()
-        excluded_path = ast.Or(exprs=[scanner_path_expr(), static_asset_expr()])
+        excluded_path = static_asset_expr()
         included_path = ast.Not(expr=excluded_path)
         agent_scope = parse_expr(
             "`$virt_traffic_category` IN {agent_categories}",

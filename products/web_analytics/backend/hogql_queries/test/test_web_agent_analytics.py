@@ -90,14 +90,13 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
         assert response.columns is not None
         return [dict(zip(response.columns, row, strict=True)) for row in response.results]
 
-    def test_overview_excludes_humans_scanners_and_unpaired_markdown_fetches(self) -> None:
+    def test_overview_excludes_humans_assets_and_unpaired_markdown_fetches(self) -> None:
         for distinct_id in ("paired", "markdown-only", "human", "crawler"):
             _create_person(team_id=self.team.pk, distinct_ids=[distinct_id], properties={})
 
         self._create_http_event("paired", "/docs/start", 200)
         self._create_http_event("paired", "/docs/start.md", 200)
         self._create_http_event("markdown-only", "/docs/other.md", 200)
-        self._create_http_event("paired", "/.env", 404)
         self._create_http_event("paired", "/logo.svg", 200)
         self._create_http_event("human", "/docs/start", 200, user_agent=HUMAN_USER_AGENT)
         self._create_http_event("crawler", "/docs/start", 200, user_agent=CRAWLER_USER_AGENT)
@@ -110,7 +109,7 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
         self.assertEqual(default_row["active_clients"], 2)
         self.assertEqual(default_row["server_requests"], 3)
         self.assertEqual(default_row["client_navigations"], 0)
-        self.assertEqual(default_row["excluded_requests"], 2)
+        self.assertEqual(default_row["excluded_requests"], 1)
         self.assertEqual(default_row["wasted"], 1)
         self.assertEqual(default_row["waste_pages"], 1)
         self.assertEqual(crawler_row["active_clients"], 3)
@@ -155,7 +154,6 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
         self._create_http_event("assistant", "/docs/sdk-2.4.1.md", 404)
         self._create_http_event("assistant", "/docs/sdk-3.0.0.html", 404)
         self._create_http_event("assistant", "/Docs/SDK-4.0.0", 404)
-        self._create_http_event("assistant", "/.env", 404)
         self._create_http_event("assistant", "/missing.svg", 404)
         self._create_http_event("human", "/docs/sdk-4.0.0", 404, user_agent=HUMAN_USER_AGENT)
         flush_persons_and_events()
@@ -191,7 +189,6 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
         self._create_http_event("assistant", "/docs/start", 200)
         self._create_http_event("assistant", "/docs/other", 200)
         self._create_http_event("assistant", "/docs/missing", 404)
-        self._create_http_event("assistant", "/.env", 200)
         self._create_http_event("assistant", "/logo.svg", 200)
         self._create_http_event("human", "/docs/start", 200, user_agent=HUMAN_USER_AGENT)
         flush_persons_and_events()
