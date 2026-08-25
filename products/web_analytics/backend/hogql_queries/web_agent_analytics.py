@@ -311,11 +311,13 @@ SELECT
     is_md,
     is_error,
     referrer,
-    concat(distinct_id, ':', agent, ':', host, ':', toString(sum(new_journey) OVER (
-        PARTITION BY distinct_id, agent, host
-        ORDER BY timestamp ASC, uuid ASC
-        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-    ))) AS journey_key
+    toString(cityHash64(concat({journey_salt}, distinct_id, agent, host, toString(toUnixTimestamp(
+        max(journey_started) OVER (
+            PARTITION BY distinct_id, agent, host
+            ORDER BY timestamp ASC, uuid ASC
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        )
+    ))))) AS journey_key
 FROM (
     SELECT
         distinct_id,
@@ -329,14 +331,14 @@ FROM (
         is_error,
         referrer,
         if(
-            dateDiff('second', lagInFrame(timestamp) OVER (
+            dateDiff('second', lagInFrame(timestamp, 1, toDateTime(0)) OVER (
                 PARTITION BY distinct_id, agent, host
                 ORDER BY timestamp ASC, uuid ASC
                 ROWS BETWEEN 1 PRECEDING AND CURRENT ROW
             ), timestamp) > {inactivity_window_seconds},
-            1,
-            0
-        ) AS new_journey
+            timestamp,
+            toDateTime(0)
+        ) AS journey_started
     FROM (
         SELECT
             distinct_id,
@@ -606,6 +608,7 @@ class WebAgentAnalyticsQueryRunner(WebAnalyticsQueryRunner[WebAgentAnalyticsQuer
             "navigation_window_seconds": ast.Constant(value=NAVIGATION_WINDOW_SECONDS),
             "inactivity_window_seconds": ast.Constant(value=INACTIVITY_WINDOW_SECONDS),
             "referrer": referrer_expr(),
+            "journey_salt": ast.Constant(value=str(self.team.uuid)),
             "selected_journey_key": ast.Constant(value=self.query.journeyKey or ""),
             "llms_source_event": self._llms_source_expr(host="properties.$host", path="properties.$pathname"),
             "llms_source_row": self._llms_source_expr(host="host", path="path"),

@@ -63,10 +63,11 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
         journey_key: str | None = None,
         intent_key: str | None = None,
         limit: int = 100,
+        date_from: str = "2026-08-01",
     ) -> WebAgentAnalyticsQueryResponse:
         query = WebAgentAnalyticsQuery(
             queryType=query_type,
-            dateRange=DateRange(date_from="2026-08-01", date_to="2026-08-20"),
+            dateRange=DateRange(date_from=date_from, date_to="2026-08-20"),
             includeCrawlers=include_crawlers,
             contentGrouping=content_grouping,
             conversionGoal=conversion_goal,
@@ -318,6 +319,33 @@ class TestWebAgentAnalyticsQueryRunner(ClickhouseTestMixin, APIBaseTest):
             (int(str(row["requests"])) for row in journeys if row["host"] == "example.com"), reverse=True
         )
         self.assertEqual(example_requests, [2, 1])
+
+    def test_journey_keys_are_opaque_and_survive_a_widened_date_range(self) -> None:
+        _create_person(team_id=self.team.pk, distinct_ids=["wanderer"], properties={})
+        self._create_http_event("wanderer", "/early", 200, timestamp="2026-08-02T09:00:00Z")
+        self._create_http_event("wanderer", "/late", 200, timestamp="2026-08-10T12:00:00Z")
+        flush_persons_and_events()
+
+        narrow = self._rows(self._run(WebAgentAnalyticsQueryType.JOURNEYS, date_from="2026-08-05"))
+        wide = self._rows(self._run(WebAgentAnalyticsQueryType.JOURNEYS, date_from="2026-08-01"))
+
+        self.assertEqual(len(narrow), 1)
+        self.assertEqual(len(wide), 2)
+        late_key = narrow[0]["journey_key"]
+        self.assertIn(late_key, [row["journey_key"] for row in wide])
+        for row in wide:
+            key = str(row["journey_key"])
+            self.assertNotIn("wanderer", key)
+            self.assertNotIn("example.com", key)
+
+        detail = self._rows(
+            self._run(
+                WebAgentAnalyticsQueryType.JOURNEY_DETAIL,
+                journey_key=str(late_key),
+                date_from="2026-08-01",
+            )
+        )
+        self.assertEqual([row["path"] for row in detail], ["/late"])
 
     def test_journey_detail_labels_transitions_by_the_strongest_available_signal(self) -> None:
         _create_person(team_id=self.team.pk, distinct_ids=["reader"], properties={})
